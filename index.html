@@ -888,27 +888,23 @@
             return doc(db, 'artifacts', appId, 'public', 'data', name, id);
         }
 
-        async function initFirebaseOrLocal() {
-            const hasFirebaseConfig = typeof __firebase_config !== 'undefined' && __firebase_config;
-            if (!hasFirebaseConfig) {
-                state.dbMode = 'local';
-                loadLocalState();
-                updateDbBadge();
-                renderAll();
-                return;
-            }
+   async function initFirebaseOrLocal() {
+            const firebaseConfig = {
+                apiKey: "AIzaSyDDMzgWQPqY6UW7wSHTLeYZcDQkP40Tx9M",
+                authDomain: "motta-school.firebaseapp.com",
+                projectId: "motta-school",
+                storageBucket: "motta-school.firebasestorage.app",
+                messagingSenderId: "13665901507",
+                appId: "1:13665901507:web:aa6fd83dd6e4550a357b76",
+                measurementId: "G-HVXCMGNZC8"
+            };
 
             try {
-                const firebaseConfig = JSON.parse(__firebase_config);
                 const app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
                 db = getFirestore(app);
 
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
+                await signInAnonymously(auth);
                 currentUser = auth.currentUser;
                 if (!currentUser) throw new Error("Authentication failed");
 
