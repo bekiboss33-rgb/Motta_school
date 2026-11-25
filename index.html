@@ -188,6 +188,9 @@
                 <button onclick="toggleMobileMenu()" class="xl:hidden p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 transition" aria-label="Menu">
                     <svg id="menu-icon-open" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
                     <svg id="menu-icon-close" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    <button onclick="navigateTo('admin')" class="hidden sm:inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-royal-950 font-bold text-xs px-3.5 py-2 rounded-xl transition shadow-sm">
+                    <span>👨‍🏫 መምህራን</span>
+                </button>
                 </button>
             </div>
         </div>
@@ -654,6 +657,7 @@
             messages: [],
             teachers: [],
             submissions: [],
+            activityLogs: [],
             publishSettings: {
              
                 "9":  { "1": false, "2": false },
@@ -1023,9 +1027,15 @@ const firebaseConfig = {
                     if (state.route === 'about') renderCurrentView();
                 }
             }, onErr('aboutPage'));
+            onSnapshot(pubCol('activityLogs'), (snap) => {
+                state.activityLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+                    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                if (state.route === 'admin' && state.adminTab === 'activity') renderCurrentView();
+            }, onErr('activityLogs'));
         }
 
         async function dbSave(colName, id, data) {
+            if (colName !== 'activityLogs') logActivity(`Update: ${colName}`, id ? `ID: ${id}` : 'አዲስ መረጃ ተጨምሯል');
             if (state.dbMode === 'firebase') {
                 if (!currentUser) return;
                 if (id) {
@@ -2315,6 +2325,9 @@ function getAboutPageData() {
                                 <button type="submit" class="w-full bg-royal-900 hover:bg-royal-800 text-white font-extrabold py-3.5 rounded-xl shadow-md transition text-sm">
                                     🔐 ${escapeHtml(t('btn_login'))}
                                 </button>
+                                <button type="button" onclick="showPasswordHint(this.form)" class="w-full text-xs font-bold text-royal-800 hover:underline pt-1">
+                                    🔑 ${state.lang === 'am' ? 'ፓስወርድ ረሱ? (ፍንጭ አሳይ / Password Hint)' : 'Forgot Password? Show Hint'}
+                                </button>
                             </form>
                         </div>
                     </div>
@@ -2337,7 +2350,8 @@ function getAboutPageData() {
                 { id: 'resources', label: t('admin_tab_resources'), icon: '📚' },
                 { id: 'gallery', label: t('admin_tab_gallery'), icon: '🖼️' },
                 { id: 'inbox', label: t('admin_tab_inbox'), icon: '📩', badge: unreadCount },
-                { id: 'settings', label: t('admin_tab_settings'), icon: '⚙️' }
+                { id: 'settings', label: t('admin_tab_settings'), icon: '⚙️' },
+                { id: 'activity', label: state.lang === 'am' ? 'የእንቅስቃሴ መዝገብ' : 'Activity Log', icon: '📜' }
             ];
 
             let tabContent = '';
@@ -2352,6 +2366,7 @@ function getAboutPageData() {
             else if (state.adminTab === 'gallery') tabContent = renderAdminGalleryTab();
             else if (state.adminTab === 'inbox') tabContent = renderAdminInboxTab();
             else if (state.adminTab === 'settings') tabContent = renderAdminSettingsTab();
+            else if (state.adminTab === 'activity') tabContent = renderAdminActivityTab();
             return `
             <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 fade-in">
                 <div class="bg-royal-950 text-white rounded-3xl p-5 sm:p-6 mb-6 flex flex-wrap items-center justify-between gap-4 shadow-lg">
@@ -2382,7 +2397,81 @@ function getAboutPageData() {
                 </div>
             </div>`;
         }
+async function logActivity(action, details = '') {
+            const actor = state.adminSession
+                ? `${state.adminSession.roleAm || state.adminSession.role} (${state.adminSession.username || ''})`
+                : 'System / Public';
+            const entry = {
+                action: String(action || ''),
+                details: String(details || ''),
+                actor,
+                timeText: new Date().toLocaleString('en-GB', { hour12: true }),
+                timestamp: Date.now()
+            };
+            if (state.dbMode === 'firebase' && typeof currentUser !== 'undefined' && currentUser) {
+                try { await addDoc(pubCol('activityLogs'), entry); } catch (e) {}
+            } else {
+                state.activityLogs = [entry, ...(state.activityLogs || [])].slice(0, 200);
+            }
+        }
 
+        function renderAdminActivityTab() {
+            const logs = (state.activityLogs || []).slice(0, 150);
+            return `
+            <div>
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+                    <div>
+                        <h2 class="text-xl font-extrabold text-royal-900">📜 ${state.lang === 'am' ? 'የቅርብ ጊዜ እንቅስቃሴዎች (Activity Log)' : 'Recent Activity Log'}</h2>
+                        <p class="text-xs text-slate-500 mt-1">🔒 ${state.lang === 'am' ? 'ይህ መዝገብ ለደህንነት ሲባል ማንም ሊያስተካክለው ወይም ሊያጠፋው አይችልም (Read-Only)።' : 'Immutable security log — cannot be edited or deleted by anyone.'}</p>
+                    </div>
+                    <span class="text-xs font-bold px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">${logs.length} ${state.lang === 'am' ? 'መዝገቦች' : 'Records'}</span>
+                </div>
+                <div class="overflow-x-auto rounded-2xl border border-slate-200">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-royal-900 text-white">
+                            <tr>
+                                <th class="py-3 px-4 font-bold">${state.lang === 'am' ? 'ቀንና ሰዓት' : 'Date & Time'}</th>
+                                <th class="py-3 px-4 font-bold">${state.lang === 'am' ? 'ተጠቃሚ' : 'User / Role'}</th>
+                                <th class="py-3 px-4 font-bold">${state.lang === 'am' ? 'ተግባር' : 'Action'}</th>
+                                <th class="py-3 px-4 font-bold">${state.lang === 'am' ? 'ዝርዝር' : 'Details'}</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-200">
+                            ${logs.length ? logs.map(l => `
+                            <tr class="hover:bg-slate-50">
+                                <td class="py-3 px-4 text-xs text-slate-500 whitespace-nowrap">${escapeHtml(l.timeText || '')}</td>
+                                <td class="py-3 px-4 font-bold text-royal-900 text-xs">${escapeHtml(l.actor || '')}</td>
+                                <td class="py-3 px-4"><span class="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-800 text-xs font-bold">${escapeHtml(l.action || '')}</span></td>
+                                <td class="py-3 px-4 text-xs text-slate-600">${escapeHtml(l.details || '-')}</td>
+                            </tr>`).join('') : `
+                            <tr><td colspan="4" class="py-8 text-center text-slate-400 text-sm">${state.lang === 'am' ? 'እስካሁን የተመዘገበ እንቅስቃሴ የለም።' : 'No activity recorded yet.'}</td></tr>`}
+                        </tbody>
+                    </table>
+                </div>
+            </div>`;
+        }
+        window.showPasswordHint = (form) => {
+            const u = String(form?.username?.value || '').trim().toLowerCase();
+            if (!u) {
+                showToast(state.lang === 'am' ? 'እባክዎ መጀመሪያ Username ያስገቡ!' : 'Please enter your username first!', 'error');
+                return;
+            }
+            let pwd = '';
+            if (u === state.adminAccounts.principal.username.toLowerCase()) pwd = state.adminAccounts.principal.password;
+            else if (u === state.adminAccounts.viceprincipal.username.toLowerCase()) pwd = state.adminAccounts.viceprincipal.password;
+            else {
+                const tc = state.teachers.find(x => String(x.username).toLowerCase() === u);
+                if (tc) pwd = String(tc.password || '');
+            }
+            if (!pwd) {
+                showToast(state.lang === 'am' ? 'ይህ Username አልተገኘም። እባክዎ አድሚኑን ያነጋግሩ።' : 'Username not found. Contact Admin.', 'error');
+                return;
+            }
+            const hint = pwd.length <= 2
+                ? `${pwd[0]}* (${pwd.length} ፊደላት)`
+                : `${pwd[0]}${'*'.repeat(Math.max(2, pwd.length - 2))}${pwd[pwd.length - 1]} (${pwd.length} ፊደላት)`;
+            showToast(state.lang === 'am' ? `🔑 የፓስወርድ ፍንጭ: ${hint}` : `🔑 Password Hint: ${hint}`, 'info');
+        };
         window.handleAdminLogin = (e) => {
             e.preventDefault();
             const fd = new FormData(e.target);
@@ -3575,82 +3664,136 @@ function getAboutPageData() {
         };
 
 // --- 2. TEACHER PORTAL TAB (EDIT, EXCEL & SUBMIT SCORES) ---
-        function renderTeacherPortalTab() {
+      function renderTeacherPortalTab() {
             const tc = state.adminSession;
-            const sem = Number(state.teacherSem || 1);
-            const myStudents = state.students.filter(s =>
+            const semVal = String(state.teacherSem || '1');
+            const isAnnual = semVal === 'annual';
+            const sem = isAnnual ? 1 : Number(semVal);
+            const activeSub = state.teacherSubject || tc.assignedSubject || 'amharic';
+            tc.assignedSubject = activeSub;
+
+            const allSubjects = [
+                'amharic', 'english', 'math', 'physics', 'chemistry', 'biology',
+                'geography', 'history', 'citizenship', 'economics', 'it', 'hpe', 'agriculture'
+            ];
+
+            const classStudents = state.students.filter(s =>
                 Number(s.grade) === Number(tc.assignedGrade) &&
-                String(s.section).toUpperCase() === String(tc.assignedSection).toUpperCase() &&
-                Number(s.semester) === sem
+                String(s.section).toUpperCase() === String(tc.assignedSection).toUpperCase()
             );
+
+            const myStudents = isAnnual
+                ? Array.from(new Map(classStudents.map(s => [String(s.username).toLowerCase(), s])).values())
+                : classStudents.filter(s => Number(s.semester) === sem);
+
             const mySubs = state.submissions.filter(sub => sub.teacherUsername === tc.username);
-            const currentSub = mySubs.find(sub =>
+            const currentSub = !isAnnual ? mySubs.find(sub =>
                 Number(sub.grade) === Number(tc.assignedGrade) &&
                 String(sub.section).toUpperCase() === String(tc.assignedSection).toUpperCase() &&
-                sub.subject === tc.assignedSubject &&
+                sub.subject === activeSub &&
                 Number(sub.semester) === sem
-            );
+            ) : null;
 
             return `
             <div>
                 <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
                     <div>
-                        <h2 class="text-xl font-extrabold text-royal-900">📝 ውጤት ማስገቢያ እና ማስተካከያ (${tc.assignedGrade}-${tc.assignedSection} • ${escapeHtml(t('sub_' + tc.assignedSubject))})</h2>
-                        <p class="text-xs text-slate-500 mt-0.5">በቀጥታ እዚህ ወይም Excel አውርደው በማስተካከል ለርዕሰ መምህሩ መላክ ይችላሉ።</p>
+                        <h2 class="text-xl font-extrabold text-royal-900">📝 ውጤት ማስገቢያ እና ማስተካከያ (${escapeHtml(tc.assignedGrade)}-${escapeHtml(tc.assignedSection)} • ${escapeHtml(t('sub_' + activeSub) || activeSub)})</h2>
+                        <p class="text-xs text-slate-500 mt-0.5">ትምህርት እና ሴሚስተር በመምረጥ በቀጥታ እዚህ ወይም Excel በመጫን ማስተካከል ይችላሉ።</p>
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
-                        <button type="button" onclick="downloadTeacherClassExcel()" class="bg-amber-500 hover:bg-amber-600 text-royal-950 font-bold text-xs px-3.5 py-2.5 rounded-xl transition">📥 የክፍሌን Excel አውርድ</button>
-                        <label class="bg-royal-900 hover:bg-royal-800 text-white font-bold text-xs px-3.5 py-2.5 rounded-xl transition cursor-pointer inline-flex items-center gap-1">
-                            📤 ከExcel ጫን (.xlsx)
-                            <input type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleTeacherClassExcelImport(event)" />
-                        </label>
-                        <select onchange="state.teacherSem=this.value; renderCurrentView();" class="px-3.5 py-2 rounded-xl border border-slate-300 text-sm font-bold bg-white">
-                            <option value="1" ${sem===1?'selected':''}>1ኛ ሴሚስተር</option>
-                            <option value="2" ${sem===2?'selected':''}>2ኛ ሴሚስተር</option>
+                        ${!isAnnual ? `
+                            <button type="button" onclick="downloadTeacherClassExcel()" class="bg-amber-500 hover:bg-amber-600 text-royal-950 font-bold text-xs px-3.5 py-2.5 rounded-xl transition">📥 Excel አውርድ</button>
+                            <label class="bg-royal-900 hover:bg-royal-800 text-white font-bold text-xs px-3.5 py-2.5 rounded-xl transition cursor-pointer">
+                                📤 ከExcel ጫን (.xlsx)
+                                <input type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleTeacherClassExcelImport(event)" />
+                            </label>
+                        ` : ''}
+                        <select onchange="state.teacherSubject=this.value; state.adminSession.assignedSubject=this.value; renderCurrentView();" class="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white">
+                            ${allSubjects.map(sub => `<option value="${sub}" ${activeSub === sub ? 'selected' : ''}>${escapeHtml(t('sub_' + sub) || sub)}</option>`).join('')}
+                        </select>
+                        <select onchange="state.teacherSem=this.value; renderCurrentView();" class="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white">
+                            <option value="1" ${semVal === '1' ? 'selected' : ''}>1ኛ ሴሚስተር</option>
+                            <option value="2" ${semVal === '2' ? 'selected' : ''}>2ኛ ሴሚስተር</option>
+                            <option value="annual" ${semVal === 'annual' ? 'selected' : ''}>ዓመታዊ አማካኝ (Annual)</option>
                         </select>
                     </div>
                 </div>
 
                 ${currentSub ? `
-                    <div class="mb-4 p-3.5 rounded-xl text-xs font-bold border ${currentSub.status==='approved'?'bg-emerald-50 border-emerald-200 text-emerald-800':currentSub.status==='rejected'?'bg-red-50 border-red-200 text-red-700':'bg-amber-50 border-amber-200 text-amber-800'}">
-                        ${currentSub.status==='approved'
-                            ? '✅ ይህ ውጤት ጸድቋል። ማስተካከያ ካስፈለገ ቁጥሩን ቀይረው (ወይም Excel ጭነው) ድጋሚ ለርዕሰ መምህር ይላኩ።'
-                            : currentSub.status==='rejected'
+                    <div class="mb-4 p-3.5 rounded-xl text-xs font-bold border ${currentSub.status === 'approved' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : currentSub.status === 'rejected' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-amber-50 border-amber-200 text-amber-800'}">
+                        ${currentSub.status === 'approved'
+                            ? '✅ ይህ ውጤት ጸድቋል። ማስተካከያ ካስፈለገ ቁጥሩን ቀይረው ድጋሚ ለርዕሰ መምህሩ ይላኩ።'
+                            : currentSub.status === 'rejected'
                                 ? '❌ ርዕሰ መምህሩ ውጤቱን መልሰውታል። እባክዎ ከታች አስተካክለው ድጋሚ ይላኩ።'
-                                : '⏳ ውጤቱ ለርዕሰ መምህር ተልኳል (Pending)። ስህተት ካዩ አስተካክለው «አዘምንና ላክ» ማለት ይችላሉ።'}
+                                : '⏳ ውጤቱ ለርዕሰ መምህሩ ተልኳል (Pending)። ስህተት ካለ አስተካክለው «አዘምንና ላክ» ማለት ይችላሉ።'}
                     </div>
                 ` : ''}
 
-                <form onsubmit="submitTeacherScores(event)" class="space-y-4">
+                ${isAnnual ? `
                     <div class="overflow-x-auto rounded-2xl border border-slate-200">
                         <table class="w-full text-sm text-left">
                             <thead class="bg-royal-900 text-white">
-                                <tr><th class="py-3 px-4">የተማሪ ስም</th><th class="py-3 px-4">Username</th><th class="py-3 px-4 w-36">ውጤት (ከ100)</th></tr>
+                                <tr>
+                                    <th class="py-3 px-4">የተማሪ ስም</th>
+                                    <th class="py-3 px-4">Username</th>
+                                    <th class="py-3 px-4 text-center">1ኛ ሴሚስተር</th>
+                                    <th class="py-3 px-4 text-center">2ኛ ሴሚስተር</th>
+                                    <th class="py-3 px-4 text-center">ዓመታዊ አማካኝ</th>
+                                </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-200">
                                 ${myStudents.map(s => {
-                                    const subEntry = currentSub?.entries?.find(en => en.studentId === s.id);
-                                    const scoreVal = subEntry !== undefined ? Number(subEntry.score) : Number(s.scores?.[tc.assignedSubject] || 0);
+                                    const uKey = String(s.username).toLowerCase();
+                                    const s1 = classStudents.find(x => String(x.username).toLowerCase() === uKey && Number(x.semester) === 1);
+                                    const s2 = classStudents.find(x => String(x.username).toLowerCase() === uKey && Number(x.semester) === 2);
+                                    const v1 = s1 ? Number(s1.scores?.[activeSub] || 0) : null;
+                                    const v2 = s2 ? Number(s2.scores?.[activeSub] || 0) : null;
+                                    const avg = (v1 !== null && v2 !== null) ? ((v1 + v2) / 2).toFixed(1) : (v1 !== null ? v1 : (v2 !== null ? v2 : '-'));
                                     return `
-                                    <tr>
+                                    <tr class="hover:bg-slate-50">
                                         <td class="py-2.5 px-4 font-bold">${escapeHtml(s.fullName)}</td>
                                         <td class="py-2.5 px-4 text-slate-500">${escapeHtml(s.username)}</td>
-                                        <td class="py-2.5 px-4"><input type="number" min="0" max="100" required name="score_${escapeHtml(s.id)}" value="${scoreVal}" class="w-24 px-3 py-1.5 rounded-lg border border-slate-300 font-bold focus:ring-2 focus:ring-royal-600 outline-none" /></td>
+                                        <td class="py-2.5 px-4 text-center font-bold">${v1 !== null ? v1 : '-'}</td>
+                                        <td class="py-2.5 px-4 text-center font-bold">${v2 !== null ? v2 : '-'}</td>
+                                        <td class="py-2.5 px-4 text-center font-extrabold text-royal-900">${avg}</td>
                                     </tr>`;
-                                }).join('') || `<tr><td colspan="3" class="py-6 text-center text-slate-500">በዚህ ክፍል እና ሴሚስተር ተማሪ አልተገኘም።</td></tr>`}
+                                }).join('') || `<tr><td colspan="5" class="py-6 text-center text-slate-500">በዚህ ክፍል ተማሪ አልተገኘም።</td></tr>`}
                             </tbody>
                         </table>
                     </div>
-                    ${myStudents.length ? `<button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-6 py-3 rounded-xl text-sm">💾 ${currentSub && currentSub.status !== 'approved' ? 'ውጤቱን አስተካክልና ላክ (Update & Submit)' : 'ለርዕሰ መምህር ላክ (Submit)'}</button>` : ''}
-                </form>
+                ` : `
+                    <form onsubmit="submitTeacherScores(event)" class="space-y-4">
+                        <div class="overflow-x-auto rounded-2xl border border-slate-200">
+                            <table class="w-full text-sm text-left">
+                                <thead class="bg-royal-900 text-white">
+                                    <tr><th class="py-3 px-4">የተማሪ ስም</th><th class="py-3 px-4">Username</th><th class="py-3 px-4 w-36">ውጤት (0-100)</th></tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-200">
+                                    ${myStudents.map(s => {
+                                        const subEntry = currentSub?.entries?.find(en => en.studentId === s.id);
+                                        const scoreVal = subEntry !== undefined ? Number(subEntry.score) : Number(s.scores?.[activeSub] || 0);
+                                        return `
+                                        <tr>
+                                            <td class="py-2.5 px-4 font-bold">${escapeHtml(s.fullName)}</td>
+                                            <td class="py-2.5 px-4 text-slate-500">${escapeHtml(s.username)}</td>
+                                            <td class="py-2.5 px-4"><input type="number" min="0" max="100" step="0.5" required name="score_${escapeHtml(s.id)}" value="${scoreVal}" class="w-28 px-3 py-1.5 rounded-lg border border-slate-300 font-bold text-center" /></td>
+                                        </tr>`;
+                                    }).join('') || `<tr><td colspan="3" class="py-6 text-center text-slate-500">በዚህ ክፍል እና ሴሚስተር ተማሪ አልተገኘም።</td></tr>`}
+                                </tbody>
+                            </table>
+                        </div>
+                        ${myStudents.length ? `<button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-6 py-3 rounded-xl transition">🚀 ውጤቱን አዘምንና ለርዕሰ መምህሩ ላክ</button>` : ''}
+                    </form>
+                `}
 
                 <h3 class="font-extrabold text-royal-900 mt-8 mb-3">የላኳቸው ውጤቶች ሁኔታ</h3>
                 <div class="space-y-2">
                     ${mySubs.map(sub => `
                         <div class="p-3.5 rounded-xl border flex justify-between items-center text-xs sm:text-sm bg-slate-50">
-                            <span><b>${sub.grade}-${sub.section}</b> (Sem ${sub.semester}) • ${sub.entries.length} ተማሪዎች</span>
-                            <span class="px-2.5 py-1 rounded-lg font-bold ${sub.status==='approved'?'bg-emerald-100 text-emerald-800':sub.status==='rejected'?'bg-red-100 text-red-700':'bg-amber-100 text-amber-800'}">
-                                ${sub.status==='approved'?'✅ ጸድቋል (Accepted)':sub.status==='rejected'?'❌ ተመልሷል (Rejected)':'⏳ ፈቃድ በመጠባበቅ ላይ (Pending)'}
+                            <span><b>${sub.grade}-${sub.section}</b> (${escapeHtml(t('sub_' + sub.subject) || sub.subject)} • Sem ${sub.semester}) • ${sub.entries.length} ተማሪዎች</span>
+                            <span class="px-2.5 py-1 rounded-lg font-bold ${sub.status === 'approved' ? 'bg-emerald-100 text-emerald-800' : sub.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}">
+                                ${sub.status === 'approved' ? '✅ ጸድቋል (Accepted)' : sub.status === 'rejected' ? '❌ ተመልሷል (Rejected)' : '⏳ ፈቃድ በመጠባበቅ ላይ'}
                             </span>
                         </div>
                     `).join('') || '<p class="text-xs text-slate-400">ገና ምንም አልላኩም።</p>'}
