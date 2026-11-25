@@ -2001,9 +2001,27 @@ function getAboutPageData() {
             const lk = state.resultLookup;
 
             if (lk.student && !lk.locked) {
-                const s = lk.student;
-                const { rank, totalPeers } = computeStudentRank(s);
-                const isPass = s.average >= 50;
+             const s = lk.student;
+                const computedRank = (s.rank && s.totalPeers)
+                    ? { rank: s.rank, totalPeers: s.totalPeers }
+                    : computeStudentRank(s);
+                const rank = computedRank.rank;
+                const totalPeers = computedRank.totalPeers;
+                const statusVal = String(s.status || (s.average >= 50 ? 'PROMOTED' : 'DETAINED')).toUpperCase();
+                const isPromoted = statusVal === 'PROMOTED' || statusVal === 'PASS';
+                const isIncomplete = statusVal === 'INCOMPLETE';
+                const statusBoxCls = isPromoted
+                    ? 'bg-emerald-50 border-emerald-200'
+                    : (isIncomplete ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200');
+                const statusLabelCls = isPromoted
+                    ? 'text-emerald-800'
+                    : (isIncomplete ? 'text-amber-800' : 'text-red-800');
+                const statusValCls = isPromoted
+                    ? 'text-emerald-700'
+                    : (isIncomplete ? 'text-amber-700' : 'text-red-700');
+                const statusDisplay = isPromoted
+                    ? '✅ PROMOTED (አልፏል)'
+                    : (isIncomplete ? '⚠️ INCOMPLETE (ያልተሟላ)' : '❌ DETAINED (አላለፈም)');
 
                 return `
                 <div class="max-w-4xl mx-auto px-4 sm:px-6 py-10 fade-in">
@@ -2087,10 +2105,10 @@ function getAboutPageData() {
                                 <div class="text-xs font-bold text-purple-800">${escapeHtml(t('lbl_rank'))}</div>
                                 <div class="text-2xl font-extrabold text-purple-900 mt-1">${rank} <span class="text-xs font-semibold text-slate-500">/ ${totalPeers}</span></div>
                             </div>
-                            <div class="${isPass ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'} border rounded-2xl p-4 text-center">
-                                <div class="text-xs font-bold ${isPass ? 'text-emerald-800' : 'text-red-800'}">${escapeHtml(t('lbl_status'))}</div>
-                                <div class="text-base sm:text-lg font-extrabold ${isPass ? 'text-emerald-700' : 'text-red-700'} mt-1.5">${escapeHtml(isPass ? t('status_pass') : t('status_fail'))}</div>
-                            </div>
+<div class="${statusBoxCls} border rounded-2xl p-4 text-center">
+                                    <div class="text-xs font-bold ${statusLabelCls}">${escapeHtml(t('lbl_status'))}</div>
+                                    <div class="text-sm sm:text-base font-extrabold ${statusValCls} mt-1.5">${statusDisplay}</div>
+                                </div>
                         </div>
 
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-8 pt-6 border-t border-slate-200 text-xs text-slate-600">
@@ -2413,13 +2431,13 @@ function getAboutPageData() {
                         : 'Control student result visibility per Grade and Semester, or toggle all grades at once.'}
                 </p>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-7">
-                    ${[1, 2].map(sem => `
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-7">
+                    ${['1', '2', 'annual'].map(sem => `
                         <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
-                            <span class="font-extrabold text-royal-900 text-sm">${escapeHtml(sem === 1 ? t('sem_1') : t('sem_2'))}</span>
+                            <span class="font-extrabold text-royal-900 text-sm">${escapeHtml(sem === '1' ? t('sem_1') : (sem === '2' ? t('sem_2') : 'ዓመታዊ አማካኝ (Annual)'))}</span>
                             <div class="flex gap-2">
-                                <button onclick="setAllGradesPublish(${sem}, true)" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition">${escapeHtml(t('publish_all'))}</button>
-                                <button onclick="setAllGradesPublish(${sem}, false)" class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition">${escapeHtml(t('lock_all'))}</button>
+                                <button onclick="setAllGradesPublish('${sem}', true)" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition">${escapeHtml(t('publish_all'))}</button>
+                                <button onclick="setAllGradesPublish('${sem}', false)" class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition">${escapeHtml(t('lock_all'))}</button>
                             </div>
                         </div>
                     `).join('')}
@@ -2432,20 +2450,22 @@ function getAboutPageData() {
                                 <th class="py-3 px-4 font-bold">${escapeHtml(t('lbl_grade'))}</th>
                                 <th class="py-3 px-4 font-bold">${escapeHtml(t('sem_1'))}</th>
                                 <th class="py-3 px-4 font-bold">${escapeHtml(t('sem_2'))}</th>
+                                <th class="py-3 px-4 font-bold">ዓመታዊ አማካኝ (Annual)</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-200">
                             ${GRADES_LIST.map(g => {
                                 const s1 = Boolean(state.publishSettings[String(g)]?.["1"]);
                                 const s2 = Boolean(state.publishSettings[String(g)]?.["2"]);
+                                const sAnn = Boolean(state.publishSettings[String(g)]?.["annual"]);
                                 return `
                                 <tr class="hover:bg-slate-50">
                                     <td class="py-4 px-4 font-extrabold text-royal-900">${escapeHtml(formatGrade(g))}</td>
                                     <td class="py-4 px-4">
                                         <label class="inline-flex items-center gap-3 cursor-pointer">
-                                            <input type="checkbox" class="sr-only switch-input" ${s1 ? 'checked' : ''} onchange="toggleGradePublish(${g}, 1, this.checked)" />
+                                            <input type="checkbox" class="sr-only switch-input" ${s1 ? 'checked' : ''} onchange="toggleGradePublish(${g}, '1', this.checked)">
                                             <div class="switch-track w-11 h-6 bg-slate-300 rounded-full relative transition">
-                                                <div class="switch-thumb w-5 h-5 bg-white rounded-full shadow absolute top-0.5 left-0.5 transition-transform"></div>
+                                                <div class="switch-thumb w-5 h-5 bg-white rounded-full shadow absolute top-0.5 left-0.5 transition"></div>
                                             </div>
                                             <span class="text-xs font-bold px-2.5 py-1 rounded-lg ${s1 ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'}">
                                                 ${escapeHtml(s1 ? t('status_published') : t('status_locked'))}
@@ -2454,12 +2474,23 @@ function getAboutPageData() {
                                     </td>
                                     <td class="py-4 px-4">
                                         <label class="inline-flex items-center gap-3 cursor-pointer">
-                                            <input type="checkbox" class="sr-only switch-input" ${s2 ? 'checked' : ''} onchange="toggleGradePublish(${g}, 2, this.checked)" />
+                                            <input type="checkbox" class="sr-only switch-input" ${s2 ? 'checked' : ''} onchange="toggleGradePublish(${g}, '2', this.checked)">
                                             <div class="switch-track w-11 h-6 bg-slate-300 rounded-full relative transition">
-                                                <div class="switch-thumb w-5 h-5 bg-white rounded-full shadow absolute top-0.5 left-0.5 transition-transform"></div>
+                                                <div class="switch-thumb w-5 h-5 bg-white rounded-full shadow absolute top-0.5 left-0.5 transition"></div>
                                             </div>
                                             <span class="text-xs font-bold px-2.5 py-1 rounded-lg ${s2 ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'}">
                                                 ${escapeHtml(s2 ? t('status_published') : t('status_locked'))}
+                                            </span>
+                                        </label>
+                                    </td>
+                                    <td class="py-4 px-4">
+                                        <label class="inline-flex items-center gap-3 cursor-pointer">
+                                            <input type="checkbox" class="sr-only switch-input" ${sAnn ? 'checked' : ''} onchange="toggleGradePublish(${g}, 'annual', this.checked)">
+                                            <div class="switch-track w-11 h-6 bg-slate-300 rounded-full relative transition">
+                                                <div class="switch-thumb w-5 h-5 bg-white rounded-full shadow absolute top-0.5 left-0.5 transition"></div>
+                                            </div>
+                                            <span class="text-xs font-bold px-2.5 py-1 rounded-lg ${sAnn ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'}">
+                                                ${escapeHtml(sAnn ? t('status_published') : t('status_locked'))}
                                             </span>
                                         </label>
                                     </td>
