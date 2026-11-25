@@ -2482,9 +2482,11 @@ async function logActivity(action, details = '') {
             if (u === state.adminAccounts.principal.username.toLowerCase() && p === state.adminAccounts.principal.password) {
                 state.adminSession = { role: 'principal', username: state.adminAccounts.principal.username, roleAm: 'ርዕሰ መምህር (Principal)', roleEn: 'School Principal' };
                 showToast(state.lang === 'am' ? 'እንኳን በደህና መጡ ርዕሰ መምህር!' : 'Welcome, Principal!', 'success');
+                logActivity('Login', 'ርዕሰ መምህር ገብቷል');
                 renderCurrentView();
             } else if (u === state.adminAccounts.viceprincipal.username.toLowerCase() && p === state.adminAccounts.viceprincipal.password) {
                 state.adminSession = { role: 'viceprincipal', username: state.adminAccounts.viceprincipal.username, roleAm: 'ምክትል ርዕሰ መምህር (Vice Principal)', roleEn: 'Vice Principal' };
+                logActivity('Login', 'ምክትል ርዕሰ መምህር ገብቷል');
                 showToast(state.lang === 'am' ? 'እንኳን በደህና መጡ ምክትል ርዕሰ መምህር!' : 'Welcome, Vice Principal!', 'success');
                 renderCurrentView();
             } else {
@@ -2499,6 +2501,7 @@ async function logActivity(action, details = '') {
                         roleEn: `Teacher (${teacher.fullName})`
                     };
                     state.adminTab = 'teacher_portal';
+                    logActivity('Login', `መምህር ገብቷል (${teacher.fullName})`);
                     showToast(state.lang === 'am' ? `እንኳን በደህና መጡ ${teacher.fullName}!` : `Welcome, ${teacher.fullName}!`, 'success');
                     renderCurrentView();
                 } else {
