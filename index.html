@@ -652,6 +652,8 @@
             resources: [],
             gallery: [],
             messages: [],
+            teachers: [],
+            submissions: [],
             publishSettings: {
                 "8":  { "1": false, "2": false },
                 "9":  { "1": false, "2": false },
@@ -980,6 +982,16 @@ const firebaseConfig = {
                     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
                 renderCurrentView();
             }, onErr('messages'));
+            onSnapshot(pubCol('teachers'), (snap) => {
+                state.teachers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                renderCurrentView();
+            }, onErr('teachers'));
+
+            onSnapshot(pubCol('submissions'), (snap) => {
+                state.submissions = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+                    .sort((a, b) => (b.submittedAt || 0) - (a.submittedAt || 0));
+                renderCurrentView();
+            }, onErr('submissions'));
 
             onSnapshot(pubDoc('config', 'publishSettings'), (snap) => {
                 if (snap.exists()) {
@@ -2089,8 +2101,15 @@ const firebaseConfig = {
                 </div>`;
             }
 
-            const unreadCount = state.messages.filter(m => !m.read).length;
-            const tabs = [
+          const unreadCount = state.messages.filter(m => !m.read).length;
+            const pendingCount = state.submissions.filter(s => s.status === 'pending').length;
+            const isTeacher = state.adminSession.role === 'teacher';
+
+            const tabs = isTeacher ? [
+                { id: 'teacher_portal', label: state.lang === 'am' ? 'ውጤት መላኪያ' : 'Submit Results', icon: '📝' }
+            ] : [
+                { id: 'approvals', label: state.lang === 'am' ? 'ውጤት ማጽደቂያ' : 'Approve Results', icon: '✅', badge: pendingCount },
+                { id: 'teachers', label: state.lang === 'am' ? 'መምህራን (Excel)' : 'Teachers (Excel)', icon: '👩‍🏫' },
                 { id: 'publish', label: t('admin_tab_publish'), icon: '🔓' },
                 { id: 'students', label: t('admin_tab_students'), icon: '🎓' },
                 { id: 'staff', label: t('admin_tab_staff'), icon: '👨‍🏫' },
@@ -2102,7 +2121,10 @@ const firebaseConfig = {
             ];
 
             let tabContent = '';
-            if (state.adminTab === 'publish') tabContent = renderAdminPublishTab();
+            if (isTeacher) tabContent = renderTeacherPortalTab();
+            else if (state.adminTab === 'approvals') tabContent = renderAdminApprovalsTab();
+            else if (state.adminTab === 'teachers') tabContent = renderAdminTeachersTab();
+            else if (state.adminTab === 'publish') tabContent = renderAdminPublishTab();
             else if (state.adminTab === 'students') tabContent = renderAdminStudentsTab();
             else if (state.adminTab === 'staff') tabContent = renderAdminStaffTab();
             else if (state.adminTab === 'notices') tabContent = renderAdminNoticesTab();
@@ -2110,7 +2132,6 @@ const firebaseConfig = {
             else if (state.adminTab === 'gallery') tabContent = renderAdminGalleryTab();
             else if (state.adminTab === 'inbox') tabContent = renderAdminInboxTab();
             else if (state.adminTab === 'settings') tabContent = renderAdminSettingsTab();
-
             return `
             <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 fade-in">
                 <div class="bg-royal-950 text-white rounded-3xl p-5 sm:p-6 mb-6 flex flex-wrap items-center justify-between gap-4 shadow-lg">
@@ -2156,7 +2177,22 @@ const firebaseConfig = {
                 showToast(state.lang === 'am' ? 'እንኳን በደህና መጡ ምክትል ርዕሰ መምህር!' : 'Welcome, Vice Principal!', 'success');
                 renderCurrentView();
             } else {
-                showToast(state.lang === 'am' ? 'የተሳሳተ የአድሚን መግቢያ መረጃ!' : 'Invalid Admin credentials!', 'error');
+                const teacher = state.teachers.find(
+                    tc => String(tc.username).toLowerCase() === u && String(tc.password) === p
+                );
+                if (teacher) {
+                    state.adminSession = {
+                        role: 'teacher',
+                        ...teacher,
+                        roleAm: `መምህር (${teacher.fullName})`,
+                        roleEn: `Teacher (${teacher.fullName})`
+                    };
+                    state.adminTab = 'teacher_portal';
+                    showToast(state.lang === 'am' ? `እንኳን በደህና መጡ ${teacher.fullName}!` : `Welcome, ${teacher.fullName}!`, 'success');
+                    renderCurrentView();
+                } else {
+                    showToast(state.lang === 'am' ? 'የተሳሳተ መግቢያ መረጃ!' : 'Invalid login credentials!', 'error');
+                }
             }
         };
 
@@ -2328,7 +2364,7 @@ const firebaseConfig = {
                                         </span>
                                     </td>
                                     <td class="py-3 px-3 text-right whitespace-nowrap">
-                                        <button onclick="openStudentFormModal('${escapeHtml(s.id)}')" class="text-royal-700 hover:underline font-bold mr-2">${escapeHtml(t('btn_edit'))}</button>
+                                      
                                         <button onclick="confirmDeleteRecord('students','${escapeHtml(s.id)}')" class="text-red-600 hover:underline font-bold">${escapeHtml(t('btn_delete'))}</button>
                                     </td>
                                 </tr>
@@ -3190,7 +3226,258 @@ const firebaseConfig = {
 
         window.state = state;
         window.renderCurrentView = renderCurrentView;
+// --- 1. MANAGE TEACHERS TAB (PRINCIPAL) ---
+        function renderAdminTeachersTab() {
+            return `
+            <div>
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+                    <h2 class="text-xl font-extrabold text-royal-900">👩‍🏫 የመምህራን አካውንቶች (${state.teachers.length})</h2>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="downloadTeacherExcelTemplate()" class="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs px-3.5 py-2.5 rounded-xl">📄 ናሙና Excel አውርድ</button>
+                        <label class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2.5 rounded-xl cursor-pointer inline-flex items-center gap-1">
+                            📤 90+ መምህራን በExcel ጫን
+                            <input type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleTeacherExcelImport(event)" />
+                        </label>
+                        <button onclick="openTeacherFormModal()" class="bg-royal-900 hover:bg-royal-800 text-white font-bold text-xs px-4 py-2.5 rounded-xl">➕ አዲስ መምህር ጨምር</button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto rounded-2xl border border-slate-200">
+                    <table class="w-full text-xs sm:text-sm text-left">
+                        <thead class="bg-slate-100 text-slate-700 font-bold">
+                            <tr>
+                                <th class="py-3 px-3">ሙሉ ስም</th>
+                                <th class="py-3 px-3">Username / Password</th>
+                                <th class="py-3 px-3">ክፍል & ሴክሽን</th>
+                                <th class="py-3 px-3">የትምህርት ዓይነት</th>
+                                <th class="py-3 px-3 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-200">
+                            ${state.teachers.map(tc => `
+                                <tr class="hover:bg-slate-50">
+                                    <td class="py-3 px-3 font-bold">${escapeHtml(tc.fullName)}</td>
+                                    <td class="py-3 px-3"><code class="bg-slate-100 px-1.5 py-0.5 rounded text-royal-800 font-bold">${escapeHtml(tc.username)}</code> / <code class="bg-amber-50 px-1.5 py-0.5 rounded">${escapeHtml(tc.password)}</code></td>
+                                    <td class="py-3 px-3 font-semibold">${tc.assignedGrade}-${escapeHtml(tc.assignedSection)}</td>
+                                    <td class="py-3 px-3">${escapeHtml(t('sub_' + tc.assignedSubject))}</td>
+                                    <td class="py-3 px-3 text-right">
+                                        <button onclick="confirmDeleteRecord('teachers','${escapeHtml(tc.id)}')" class="text-red-600 hover:underline font-bold">${escapeHtml(t('btn_delete'))}</button>
+                                    </td>
+                                </tr>
+                            `).join('') || `<tr><td colspan="5" class="py-8 text-center text-slate-500">ምንም መምህር አልተመዘገበም።</td></tr>`}
+                        </tbody>
+                    </table>
+                </div>
+            </div>`;
+        }
 
+        window.openTeacherFormModal = () => {
+            openAdminModal('አዲስ መምህር ጨምር', `
+                <form onsubmit="saveTeacherForm(event)" class="space-y-4 text-sm">
+                    <div><label class="block text-xs font-bold mb-1">ሙሉ ስም *</label><input name="fullName" required class="w-full px-3 py-2 rounded-xl border border-slate-300" /></div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="block text-xs font-bold mb-1">Username *</label><input name="username" required class="w-full px-3 py-2 rounded-xl border border-slate-300" /></div>
+                        <div><label class="block text-xs font-bold mb-1">Password *</label><input name="password" required class="w-full px-3 py-2 rounded-xl border border-slate-300" /></div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div><label class="block text-xs font-bold mb-1">ክፍል</label>
+                            <select name="assignedGrade" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white">${GRADES_LIST.map(g => `<option value="${g}">${g}</option>`).join('')}</select>
+                        </div>
+                        <div><label class="block text-xs font-bold mb-1">ሴክሽን</label><input name="assignedSection" required value="A" class="w-full px-3 py-2 rounded-xl border border-slate-300 uppercase" /></div>
+                        <div><label class="block text-xs font-bold mb-1">ትምህርት</label>
+                            <select name="assignedSubject" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white">${SUBJECT_KEYS.map(k => `<option value="${k}">${escapeHtml(t('sub_' + k))}</option>`).join('')}</select>
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-2 pt-3">
+                        <button type="button" onclick="closeAdminModal()" class="px-4 py-2 rounded-xl border font-bold text-xs">ሰርዝ</button>
+                        <button type="submit" class="px-5 py-2 rounded-xl bg-royal-900 text-white font-bold text-xs">አስቀምጥ</button>
+                    </div>
+                </form>
+            `);
+        };
+
+        window.saveTeacherForm = async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            const username = fd.get('username').trim().toLowerCase();
+            await dbSave('teachers', username, {
+                fullName: fd.get('fullName').trim(),
+                username,
+                password: fd.get('password').trim(),
+                assignedGrade: Number(fd.get('assignedGrade')),
+                assignedSection: fd.get('assignedSection').trim().toUpperCase(),
+                assignedSubject: fd.get('assignedSubject')
+            });
+            closeAdminModal();
+            showToast(t('saved_success'), 'success');
+        };
+
+        window.downloadTeacherExcelTemplate = () => {
+            const ws = XLSX.utils.json_to_sheet([{ FullName: "መ/ር አበበ", Username: "abebe_phy", Password: "123456", Grade: 11, Section: "B", Subject: "physics" }]);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Teachers");
+            XLSX.writeFile(wb, "Motta_Teachers_Template.xlsx");
+        };
+
+        window.handleTeacherExcelImport = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const wb = XLSX.read(await file.arrayBuffer());
+            const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+            let count = 0;
+            for (const r of rows) {
+                const username = String(r.Username || '').trim().toLowerCase();
+                if (!username) continue;
+                await dbSave('teachers', username, {
+                    fullName: String(r.FullName || username).trim(),
+                    username,
+                    password: String(r.Password || '123456').trim(),
+                    assignedGrade: Number(r.Grade || 11),
+                    assignedSection: String(r.Section || 'A').trim().toUpperCase(),
+                    assignedSubject: String(r.Subject || 'math').trim().toLowerCase()
+                });
+                count++;
+            }
+            showToast(`${count} መምህራን ተመዝግበዋል!`, 'success');
+            e.target.value = '';
+        };
+
+        // --- 2. TEACHER PORTAL TAB (SUBMIT SCORES) ---
+        function renderTeacherPortalTab() {
+            const tc = state.adminSession;
+            const sem = Number(state.teacherSem || 1);
+            const myStudents = state.students.filter(s =>
+                Number(s.grade) === Number(tc.assignedGrade) &&
+                String(s.section).toUpperCase() === String(tc.assignedSection).toUpperCase() &&
+                Number(s.semester) === sem
+            );
+            const mySubs = state.submissions.filter(sub => sub.teacherUsername === tc.username);
+
+            return `
+            <div>
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+                    <div>
+                        <h2 class="text-xl font-extrabold text-royal-900">📝 ውጤት ማስገቢያ (${tc.assignedGrade}-${tc.assignedSection} • ${escapeHtml(t('sub_' + tc.assignedSubject))})</h2>
+                        <p class="text-xs text-slate-500 mt-0.5">ውጤቱን ሞልተው ሲልኩ ርዕሰ መምህሩ Accept እስኪሉ ድረስ Pending ይሆናል።</p>
+                    </div>
+                    <select onchange="state.teacherSem=this.value; renderCurrentView();" class="px-4 py-2 rounded-xl border border-slate-300 text-sm font-bold bg-white">
+                        <option value="1" ${sem===1?'selected':''}>1ኛ ሴሚስተር</option>
+                        <option value="2" ${sem===2?'selected':''}>2ኛ ሴሚስተር</option>
+                    </select>
+                </div>
+
+                <form onsubmit="submitTeacherScores(event)" class="space-y-4">
+                    <div class="overflow-x-auto rounded-2xl border border-slate-200">
+                        <table class="w-full text-sm text-left">
+                            <thead class="bg-royal-900 text-white">
+                                <tr><th class="py-3 px-4">የተማሪ ስም</th><th class="py-3 px-4">Username</th><th class="py-3 px-4 w-36">ውጤት (ከ100)</th></tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200">
+                                ${myStudents.map(s => `
+                                    <tr>
+                                        <td class="py-2.5 px-4 font-bold">${escapeHtml(s.fullName)}</td>
+                                        <td class="py-2.5 px-4 text-slate-500">${escapeHtml(s.username)}</td>
+                                        <td class="py-2.5 px-4"><input type="number" min="0" max="100" required name="score_${escapeHtml(s.id)}" value="${Number(s.scores?.[tc.assignedSubject] || 0)}" class="w-24 px-3 py-1.5 rounded-lg border border-slate-300 font-bold" /></td>
+                                    </tr>
+                                `).join('') || `<tr><td colspan="3" class="py-6 text-center text-slate-500">በዚህ ክፍል እና ሴሚስተር ተማሪ አልተገኘም።</td></tr>`}
+                            </tbody>
+                        </table>
+                    </div>
+                    ${myStudents.length ? `<button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-6 py-3 rounded-xl text-sm">📤 ለርዕሰ መምህር ላክ (Submit)</button>` : ''}
+                </form>
+
+                <h3 class="font-extrabold text-royal-900 mt-8 mb-3">የላኳቸው ውጤቶች ሁኔታ</h3>
+                <div class="space-y-2">
+                    ${mySubs.map(sub => `
+                        <div class="p-3.5 rounded-xl border flex justify-between items-center text-xs sm:text-sm bg-slate-50">
+                            <span><b>${sub.grade}-${sub.section}</b> (Sem ${sub.semester}) • ${sub.entries.length} ተማሪዎች</span>
+                            <span class="px-2.5 py-1 rounded-lg font-bold ${sub.status==='approved'?'bg-emerald-100 text-emerald-800':sub.status==='rejected'?'bg-red-100 text-red-700':'bg-amber-100 text-amber-800'}">
+                                ${sub.status==='approved'?'✅ ጸድቋል (Accepted)':sub.status==='rejected'?'❌ ተመልሷል (Rejected)':'⏳ ፈቃድ በመጠባበቅ ላይ (Pending)'}
+                            </span>
+                        </div>
+                    `).join('') || '<p class="text-xs text-slate-400">ገና ምንም አልላኩም።</p>'}
+                </div>
+            </div>`;
+        }
+
+        window.submitTeacherScores = async (e) => {
+            e.preventDefault();
+            const tc = state.adminSession;
+            const sem = Number(state.teacherSem || 1);
+            const fd = new FormData(e.target);
+            const entries = [];
+            for (const [k, v] of fd.entries()) {
+                if (k.startsWith('score_')) {
+                    const studentId = k.replace('score_', '');
+                    const st = state.students.find(x => x.id === studentId);
+                    if (st) entries.push({ studentId, fullName: st.fullName, username: st.username, score: Number(v) });
+                }
+            }
+            await dbSave('submissions', null, {
+                teacherName: tc.fullName,
+                teacherUsername: tc.username,
+                grade: tc.assignedGrade,
+                section: tc.assignedSection,
+                subject: tc.assignedSubject,
+                semester: sem,
+                status: 'pending',
+                entries,
+                submittedAt: Date.now()
+            });
+            showToast('ውጤቱ ለርዕሰ መምህሩ ተልኳል!', 'success');
+        };
+
+        // --- 3. PRINCIPAL APPROVALS TAB (READ-ONLY + ACCEPT/REJECT) ---
+        function renderAdminApprovalsTab() {
+            const pending = state.submissions.filter(s => s.status === 'pending');
+            return `
+            <div>
+                <h2 class="text-xl font-extrabold text-royal-900 mb-1">✅ ከመምህራን የተላኩ ውጤቶች (${pending.length} ፈቃድ የሚጠብቁ)</h2>
+                <p class="text-xs text-slate-500 mb-5">ውጤቱን አረጋግጠው Accept ወይም Reject ማለት ብቻ ይችላሉ (ውጤት መቀየር አይቻልም)።</p>
+                <div class="space-y-4">
+                    ${state.submissions.map(sub => `
+                        <div class="p-5 rounded-2xl border ${sub.status==='pending'?'border-amber-300 bg-amber-50/40':'border-slate-200 bg-white'}">
+                            <div class="flex flex-wrap justify-between items-center gap-3 mb-3">
+                                <div>
+                                    <div class="font-extrabold text-royal-900">${escapeHtml(sub.teacherName)} — ክፍል ${sub.grade}-${escapeHtml(sub.section)} (${escapeHtml(t('sub_' + sub.subject))} • Sem ${sub.semester})</div>
+                                    <div class="text-xs text-slate-500">${sub.entries.length} ተማሪዎች</div>
+                                </div>
+                                ${sub.status === 'pending' ? `
+                                    <div class="flex gap-2">
+                                        <button onclick="approveSubmission('${escapeHtml(sub.id)}')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-xs">✅ Accept (አጽድቅ)</button>
+                                        <button onclick="rejectSubmission('${escapeHtml(sub.id)}')" class="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded-xl text-xs">❌ Reject (መልስ)</button>
+                                    </div>
+                                ` : `<span class="text-xs font-bold px-3 py-1 rounded-lg ${sub.status==='approved'?'bg-emerald-100 text-emerald-800':'bg-red-100 text-red-700'}">${sub.status==='approved'?'✅ Accepted':'❌ Rejected'}</span>`}
+                            </div>
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                                ${sub.entries.map(en => `<div class="bg-white p-2 rounded-lg border flex justify-between"><span class="truncate pr-2">${escapeHtml(en.fullName)}</span><b class="text-royal-900">${en.score}</b></div>`).join('')}
+                            </div>
+                        </div>
+                    `).join('') || '<p class="text-center text-slate-500 py-8 text-sm">ከመምህራን የተላከ ውጤት የለም።</p>'}
+                </div>
+            </div>`;
+        }
+
+        window.approveSubmission = async (subId) => {
+            const sub = state.submissions.find(x => x.id === subId);
+            if (!sub) return;
+            for (const en of sub.entries) {
+                const st = state.students.find(x => x.id === en.studentId);
+                if (!st) continue;
+                const scores = { ...(st.scores || {}), [sub.subject]: Number(en.score) };
+                const total = SUBJECT_KEYS.reduce((a, k) => a + Number(scores[k] || 0), 0);
+                const average = Number((total / SUBJECT_KEYS.length).toFixed(1));
+                await dbSave('students', st.id, { ...st, scores, total, average, status: average >= 50 ? 'Pass' : 'Fail', updatedAt: Date.now() });
+            }
+            await dbSave('submissions', subId, { ...sub, status: 'approved', approvedAt: Date.now() });
+            showToast('ውጤቱ ጸድቆ ወደ ተማሪዎች ዳታቤዝ ገብቷል!', 'success');
+        };
+
+        window.rejectSubmission = async (subId) => {
+            const sub = state.submissions.find(x => x.id === subId);
+            if (!sub) return;
+            await dbSave('submissions', subId, { ...sub, status: 'rejected' });
+            showToast('ውጤቱ ወደ መምህሩ ተመልሷል።', 'info');
+        };
         // 11. BOOTSTRAP
         updateChromeInfo();
         initFirebaseOrLocal();
