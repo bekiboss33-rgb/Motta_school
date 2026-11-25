@@ -1452,41 +1452,131 @@ const firebaseConfig = {
             </div>`;
         }
 
+    function getAboutPageData() {
+            try {
+                const saved = JSON.parse(localStorage.getItem('motta_about_page_v1') || 'null');
+                if (saved && Array.isArray(saved.cards)) return saved;
+            } catch (e) {}
+            return {
+                title: t('about_title'),
+                subtitle: t('about_subtitle'),
+                desc: t('footer_desc'),
+                cards: [
+                    { id: 'c1', icon: '🎯', title: t('vision_title'), desc: t('vision_desc') },
+                    { id: 'c2', icon: '🚀', title: t('mission_title'), desc: t('mission_desc') },
+                    { id: 'c3', icon: '⭐', title: t('values_title'), desc: t('values_desc') }
+                ]
+            };
+        }
+
+        function saveAboutPageData(data) {
+            localStorage.setItem('motta_about_page_v1', JSON.stringify(data));
+            renderCurrentView();
+        }
+
+        window.editAboutHeader = () => {
+            const data = getAboutPageData();
+            const title = prompt('ዋና ርዕስ (Title):', data.title);
+            if (title === null) return;
+            const subtitle = prompt('ንዑስ ርዕስ (Subtitle):', data.subtitle);
+            if (subtitle === null) return;
+            const desc = prompt('መግለጫ ጽሑፍ (Description):', data.desc);
+            if (desc === null) return;
+            saveAboutPageData({ ...data, title: title.trim() || data.title, subtitle: subtitle.trim(), desc: desc.trim() });
+            showToast('የ«ስለ እኛ» መግቢያ ተስተካክሏል!', 'success');
+        };
+
+        window.addAboutCard = () => {
+            const title = prompt('የአዲሱ ካርድ ርዕስ (ለምሳሌ: ታሪካችን / ዓላማችን):');
+            if (!title || !title.trim()) return;
+            const desc = prompt('ዝርዝር መግለጫ:');
+            if (desc === null) return;
+            const icon = prompt('አይከን (Emoji - ለምሳሌ 📌, 🏆, 📚):', '📌') || '📌';
+            const data = getAboutPageData();
+            data.cards.push({ id: 'c_' + Date.now(), icon: icon.trim(), title: title.trim(), desc: desc.trim() });
+            saveAboutPageData(data);
+            showToast('አዲስ ካርድ ተጨምሯል!', 'success');
+        };
+
+        window.editAboutCard = (id) => {
+            const data = getAboutPageData();
+            const card = data.cards.find(c => c.id === id);
+            if (!card) return;
+            const title = prompt('ርዕስ አስተካክል:', card.title);
+            if (title === null) return;
+            const desc = prompt('መግለጫ አስተካክል:', card.desc);
+            if (desc === null) return;
+            const icon = prompt('አይከን (Emoji):', card.icon);
+            if (icon === null) return;
+            card.title = title.trim() || card.title;
+            card.desc = desc.trim();
+            card.icon = icon.trim() || card.icon;
+            saveAboutPageData(data);
+            showToast('ካርዱ ተስተካክሏል!', 'success');
+        };
+
+        window.deleteAboutCard = (id) => {
+            if (!confirm('ይህን ካርድ ማጥፋት ይፈልጋሉ?')) return;
+            const data = getAboutPageData();
+            data.cards = data.cards.filter(c => c.id !== id);
+            saveAboutPageData(data);
+            showToast('ካርዱ ጠፍቷል!', 'info');
+        };
+
         function renderAboutView() {
+            const data = getAboutPageData();
+            const isAdmin = Boolean(state.adminSession && state.adminSession.role !== 'teacher');
+
             return `
             <div class="max-w-7xl mx-auto px-4 sm:px-6 py-10 fade-in">
+                ${isAdmin ? `
+                <div class="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 flex flex-wrap items-center justify-between gap-3">
+                    <span class="text-xs sm:text-sm font-extrabold text-amber-900">🔧 የአድሚን ማስተካከያ (ስለ እኛ ገጽ)</span>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="editAboutHeader()" class="bg-royal-900 hover:bg-royal-800 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition">✏️ መግቢያ አስተካክል</button>
+                        <button onclick="addAboutCard()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition">➕ አዲስ ካርድ ጨምር</button>
+                    </div>
+                </div>
+                ` : ''}
+
                 <div class="bg-gradient-to-r from-royal-900 to-royal-800 rounded-3xl p-8 sm:p-10 text-white mb-10 flex flex-col md:flex-row items-center gap-6">
                     <div class="w-24 h-24 shrink-0">${createSchoolEmblemSVG()}</div>
                     <div>
-                        <h1 class="text-2xl sm:text-3xl font-extrabold">${escapeHtml(t('about_title'))}</h1>
-                        <p class="text-gold-300 font-semibold mt-1">${escapeHtml(t('about_subtitle'))}</p>
-                        <p class="text-slate-200 text-sm mt-3 leading-relaxed max-w-3xl">${escapeHtml(t('footer_desc'))}</p>
+                        <h1 class="text-2xl sm:text-3xl font-extrabold">${escapeHtml(data.title)}</h1>
+                        <p class="text-gold-300 font-semibold mt-1">${escapeHtml(data.subtitle)}</p>
+                        <p class="text-slate-200 text-sm mt-3 leading-relaxed max-w-3xl">${escapeHtml(data.desc)}</p>
                     </div>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-                        <div class="w-11 h-11 rounded-xl bg-royal-50 text-royal-900 flex items-center justify-center text-xl mb-3">🎯</div>
-                        <h2 class="font-extrabold text-royal-900 text-lg">${escapeHtml(t('vision_title'))}</h2>
-                        <p class="text-sm text-slate-600 mt-2 leading-relaxed">${escapeHtml(t('vision_text'))}</p>
+                    ${data.cards.map(card => `
+                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 relative flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="w-11 h-11 rounded-xl bg-royal-50 text-royal-900 flex items-center justify-center text-xl">${escapeHtml(card.icon)}</div>
+                                ${isAdmin ? `
+                                <div class="flex gap-1.5">
+                                    <button onclick="editAboutCard('${escapeHtml(card.id)}')" title="አስተካክል" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-amber-100 text-xs font-bold text-slate-700">✏️</button>
+                                    <button onclick="deleteAboutCard('${escapeHtml(card.id)}')" title="አጥፋ" class="px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-xs font-bold text-red-600">🗑️</button>
+                                </div>
+                                ` : ''}
+                            </div>
+                            <h2 class="font-extrabold text-royal-900 text-lg">${escapeHtml(card.title)}</h2>
+                            <p class="text-slate-600 text-sm mt-2 leading-relaxed">${escapeHtml(card.desc)}</p>
+                        </div>
                     </div>
-                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-                        <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center text-xl mb-3">🚀</div>
-                        <h2 class="font-extrabold text-emerald-800 text-lg">${escapeHtml(t('mission_title'))}</h2>
-                        <p class="text-sm text-slate-600 mt-2 leading-relaxed">${escapeHtml(t('mission_text'))}</p>
-                    </div>
-                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-                        <div class="w-11 h-11 rounded-xl bg-amber-50 text-gold-600 flex items-center justify-center text-xl mb-3">⭐</div>
-                        <h2 class="font-extrabold text-gold-700 text-lg">${escapeHtml(t('values_title'))}</h2>
-                        <p class="text-sm text-slate-600 mt-2 leading-relaxed">${escapeHtml(t('values_text'))}</p>
-                    </div>
+                    `).join('')}
                 </div>
 
-                <h2 class="text-xl sm:text-2xl font-extrabold text-royal-900 mb-5 flex items-center gap-2">
-                    <span class="w-2 h-7 bg-gold-500 rounded-full"></span>
-                    ${escapeHtml(t('our_departments'))} (9–12)
-                </h2>
-                ${renderDepartmentsGrid()}
+                <h2 class="text-xl font-extrabold text-royal-900 mb-4 border-l-4 border-gold-500 pl-3">የትምህርት ክፍሎቻችን (9–12)</h2>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    ${[9, 10, 11, 12].map(g => `
+                    <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm text-center">
+                        <div class="text-2xl font-black text-royal-900">${g}ኛ ክፍል</div>
+                        <div class="text-xs text-slate-500 mt-1">Grade ${g}</div>
+                    </div>
+                    `).join('')}
+                </div>
             </div>`;
         }
 
@@ -1990,6 +2080,7 @@ const firebaseConfig = {
                                 <select name="semester" class="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm font-semibold bg-white outline-none focus:ring-2 focus:ring-royal-600">
                                     <option value="1">${escapeHtml(t('sem_1'))}</option>
                                     <option value="2">${escapeHtml(t('sem_2'))}</option>
+                                    <option value="annual">📊 ዓመታዊ አማካኝ (Annual Average)</option>
                                 </select>
                             </div>
                             <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 rounded-xl shadow-md transition text-sm sm:text-base">
@@ -2029,39 +2120,86 @@ const firebaseConfig = {
             renderCurrentView();
         };
 
-        window.handleStudentResultLogin = (e) => {
+     window.handleStudentResultLogin = (e) => {
             e.preventDefault();
             const fd = new FormData(e.target);
-            const username = fd.get('username').trim().toLowerCase();
-            const secretCode = fd.get('secretCode').trim();
-            const semester = Number(fd.get('semester'));
+            const username = String(fd.get('username') || '').trim().toLowerCase();
+            const secretCode = String(fd.get('secretCode') || '').trim();
+            const semRaw = String(fd.get('semester') || '1');
 
-            const match = state.students.find(
-                s => String(s.username).toLowerCase() === username &&
-                     String(s.secretCode) === secretCode &&
-                     Number(s.semester) === semester
+            const isPublished = (g, s) => Boolean(state.publishSettings?.[String(g)]?.[String(s)]);
+
+            // --- ዓመታዊ አማካኝ (ANNUAL AVERAGE) ---
+            if (semRaw === 'annual') {
+                const s1 = state.students.find(x => String(x.username).toLowerCase() === username && String(x.secretCode) === secretCode && Number(x.semester) === 1);
+                const s2 = state.students.find(x => String(x.username).toLowerCase() === username && String(x.secretCode) === secretCode && Number(x.semester) === 2);
+
+                if (!s1 || !s2) {
+                    state.resultLookup = { student: null, locked: false, lockedGrade: null, lockedSemester: null, error: 'ዓመታዊ አማካኝ ለማየት የ1ኛ እና የ2ኛ ሴሚስተር ውጤቶች ሁለቱም መኖር አለባቸው!' };
+                    renderCurrentView();
+                    return;
+                }
+                if (!isPublished(s1.grade, 1) || !isPublished(s1.grade, 2)) {
+                    state.resultLookup = { student: null, locked: true, lockedGrade: s1.grade, lockedSemester: '1 & 2', error: '' };
+                    renderCurrentView();
+                    return;
+                }
+
+                // የክፍሉን ተማሪዎች በሙሉ ዓመታዊ አማካይ አስልቶ ደረጃ (Rank) ማውጣት
+                const classmates = [...new Set(
+                    state.students
+                        .filter(x => Number(x.grade) === Number(s1.grade) && String(x.section).toUpperCase() === String(s1.section).toUpperCase())
+                        .map(x => String(x.username).toLowerCase())
+                )];
+
+                const annualList = classmates.map(u => {
+                    const m1 = state.students.find(x => String(x.username).toLowerCase() === u && Number(x.semester) === 1);
+                    const m2 = state.students.find(x => String(x.username).toLowerCase() === u && Number(x.semester) === 2);
+                    if (!m1 || !m2) return null;
+                    const avgScores = {};
+                    for (const k of SUBJECT_KEYS) {
+                        const v1 = m1.scores?.[k];
+                        const v2 = m2.scores?.[k];
+                        if (v1 !== undefined && v1 !== '' && v2 !== undefined && v2 !== '') {
+                            avgScores[k] = Number(((Number(v1) + Number(v2)) / 2).toFixed(1));
+                        }
+                    }
+                    const calc = calculateStudentPromotion(avgScores, m1.grade, m1.section);
+                    return { ...m1, semester: 'ዓመታዊ (Annual)', scores: avgScores, ...calc };
+                }).filter(Boolean).sort((a, b) => b.average - a.average);
+
+                const idx = annualList.findIndex(x => String(x.username).toLowerCase() === username);
+                const match = { ...annualList[idx], rank: idx + 1, rankTotal: annualList.length };
+                state.resultLookup = { student: match, locked: false, lockedGrade: null, lockedSemester: null, error: '' };
+                renderCurrentView();
+                return;
+            }
+
+            // --- 1ኛ ወይም 2ኛ ሴሚስተር ---
+            const semester = Number(semRaw);
+            const matchRaw = state.students.find(x =>
+                String(x.username).toLowerCase() === username &&
+                String(x.secretCode) === secretCode &&
+                Number(x.semester) === semester
             );
-
-            if (!match) {
-                state.resultLookup = { student: null, locked: false, lockedGrade: null, lockedSemester: null, error: t('err_invalid_student') };
+            if (!matchRaw) {
+                state.resultLookup = { student: null, locked: false, lockedGrade: null, lockedSemester: null, error: t('res_err_not_found') };
+                renderCurrentView();
+                return;
+            }
+            if (!isPublished(matchRaw.grade, semester)) {
+                state.resultLookup = { student: null, locked: true, lockedGrade: matchRaw.grade, lockedSemester: semester, error: '' };
                 renderCurrentView();
                 return;
             }
 
-            const gradeCfg = state.publishSettings[String(match.grade)] || {};
-            const isPublished = Boolean(gradeCfg[String(semester)]);
-
-            if (!isPublished) {
-                state.resultLookup = {
-                    student: null,
-                    locked: true,
-                    lockedGrade: match.grade,
-                    lockedSemester: semester,
-                    error: ''
-                };
-                renderCurrentView();
-                return;
-            }
+            // የሴሚስተሩን ደረጃ (Rank) እና አዲሱን ውሳኔ ማስላት
+            const peers = state.students
+                .filter(x => Number(x.grade) === Number(matchRaw.grade) && String(x.section).toUpperCase() === String(matchRaw.section).toUpperCase() && Number(x.semester) === semester)
+                .sort((a, b) => Number(b.average || 0) - Number(a.average || 0));
+            const rank = peers.findIndex(x => x.id === matchRaw.id) + 1;
+            const calc = calculateStudentPromotion(matchRaw.scores || {}, matchRaw.grade, matchRaw.section);
+            const match = { ...matchRaw, ...calc, rank, rankTotal: peers.length };
 
             state.resultLookup = { student: match, locked: false, lockedGrade: null, lockedSemester: null, error: '' };
             renderCurrentView();
@@ -3337,7 +3475,7 @@ const firebaseConfig = {
             e.target.value = '';
         };
 
-       // --- 2. TEACHER PORTAL TAB (EDIT & SUBMIT SCORES) ---
+// --- 2. TEACHER PORTAL TAB (EDIT, EXCEL & SUBMIT SCORES) ---
         function renderTeacherPortalTab() {
             const tc = state.adminSession;
             const sem = Number(state.teacherSem || 1);
@@ -3359,21 +3497,28 @@ const firebaseConfig = {
                 <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
                     <div>
                         <h2 class="text-xl font-extrabold text-royal-900">📝 ውጤት ማስገቢያ እና ማስተካከያ (${tc.assignedGrade}-${tc.assignedSection} • ${escapeHtml(t('sub_' + tc.assignedSubject))})</h2>
-                        <p class="text-xs text-slate-500 mt-0.5">የተማሪዎችዎን ውጤት በፈለጉት ጊዜ አስተካክለው ለርዕሰ መምህሩ መላክ ይችላሉ።</p>
+                        <p class="text-xs text-slate-500 mt-0.5">በቀጥታ እዚህ ወይም Excel አውርደው በማስተካከል ለርዕሰ መምህሩ መላክ ይችላሉ።</p>
                     </div>
-                    <select onchange="state.teacherSem=this.value; renderCurrentView();" class="px-4 py-2 rounded-xl border border-slate-300 text-sm font-bold bg-white">
-                        <option value="1" ${sem===1?'selected':''}>1ኛ ሴሚስተር</option>
-                        <option value="2" ${sem===2?'selected':''}>2ኛ ሴሚስተር</option>
-                    </select>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button type="button" onclick="downloadTeacherClassExcel()" class="bg-amber-500 hover:bg-amber-600 text-royal-950 font-bold text-xs px-3.5 py-2.5 rounded-xl transition">📥 የክፍሌን Excel አውርድ</button>
+                        <label class="bg-royal-900 hover:bg-royal-800 text-white font-bold text-xs px-3.5 py-2.5 rounded-xl transition cursor-pointer inline-flex items-center gap-1">
+                            📤 ከExcel ጫን (.xlsx)
+                            <input type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleTeacherClassExcelImport(event)" />
+                        </label>
+                        <select onchange="state.teacherSem=this.value; renderCurrentView();" class="px-3.5 py-2 rounded-xl border border-slate-300 text-sm font-bold bg-white">
+                            <option value="1" ${sem===1?'selected':''}>1ኛ ሴሚስተር</option>
+                            <option value="2" ${sem===2?'selected':''}>2ኛ ሴሚስተር</option>
+                        </select>
+                    </div>
                 </div>
 
                 ${currentSub ? `
                     <div class="mb-4 p-3.5 rounded-xl text-xs font-bold border ${currentSub.status==='approved'?'bg-emerald-50 border-emerald-200 text-emerald-800':currentSub.status==='rejected'?'bg-red-50 border-red-200 text-red-700':'bg-amber-50 border-amber-200 text-amber-800'}">
                         ${currentSub.status==='approved'
-                            ? '✅ ይህ ውጤት ጸድቋል። ማስተካከያ ካስፈለገ ቁጥሩን ቀይረው ድጋሚ ለርዕሰ መምህር ይላኩ።'
+                            ? '✅ ይህ ውጤት ጸድቋል። ማስተካከያ ካስፈለገ ቁጥሩን ቀይረው (ወይም Excel ጭነው) ድጋሚ ለርዕሰ መምህር ይላኩ።'
                             : currentSub.status==='rejected'
                                 ? '❌ ርዕሰ መምህሩ ውጤቱን መልሰውታል። እባክዎ ከታች አስተካክለው ድጋሚ ይላኩ።'
-                                : '⏳ ውጤቱ ለርዕሰ መምህር ተልኳል (Pending)። ስህተት ካዩ ከታች አስተካክለው «አዘምንና ላክ» ማለት ይችላሉ።'}
+                                : '⏳ ውጤቱ ለርዕሰ መምህር ተልኳል (Pending)። ስህተት ካዩ አስተካክለው «አዘምንና ላክ» ማለት ይችላሉ።'}
                     </div>
                 ` : ''}
 
@@ -3413,6 +3558,78 @@ const firebaseConfig = {
                 </div>
             </div>`;
         }
+
+        window.downloadTeacherClassExcel = () => {
+            const tc = state.adminSession;
+            const sem = Number(state.teacherSem || 1);
+            const myStudents = state.students.filter(s =>
+                Number(s.grade) === Number(tc.assignedGrade) &&
+                String(s.section).toUpperCase() === String(tc.assignedSection).toUpperCase() &&
+                Number(s.semester) === sem
+            );
+            if (!myStudents.length) {
+                showToast('በዚህ ክፍል የሚወርድ ተማሪ የለም!', 'error');
+                return;
+            }
+            const currentSub = state.submissions.find(sub =>
+                sub.teacherUsername === tc.username &&
+                Number(sub.grade) === Number(tc.assignedGrade) &&
+                String(sub.section).toUpperCase() === String(tc.assignedSection).toUpperCase() &&
+                sub.subject === tc.assignedSubject &&
+                Number(sub.semester) === sem
+            );
+            const rows = myStudents.map(s => {
+                const subEntry = currentSub?.entries?.find(en => en.studentId === s.id);
+                const scoreVal = subEntry !== undefined ? Number(subEntry.score) : Number(s.scores?.[tc.assignedSubject] || 0);
+                return { FullName: s.fullName, Username: s.username, Score: scoreVal };
+            });
+            const ws = XLSX.utils.json_to_sheet(rows);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, `${tc.assignedGrade}${tc.assignedSection}_${tc.assignedSubject}`);
+            XLSX.writeFile(wb, `Grade${tc.assignedGrade}${tc.assignedSection}_${tc.assignedSubject}_Sem${sem}.xlsx`);
+            showToast('የክፍልዎ Excel ፋይል ወርዷል!', 'info');
+        };
+
+        window.handleTeacherClassExcelImport = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            try {
+                const tc = state.adminSession;
+                const sem = Number(state.teacherSem || 1);
+                const myStudents = state.students.filter(s =>
+                    Number(s.grade) === Number(tc.assignedGrade) &&
+                    String(s.section).toUpperCase() === String(tc.assignedSection).toUpperCase() &&
+                    Number(s.semester) === sem
+                );
+                const wb = XLSX.read(await file.arrayBuffer());
+                const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+                let count = 0;
+                for (const raw of rows) {
+                    const get = (keys) => {
+                        for (const k of Object.keys(raw)) {
+                            if (keys.includes(k.trim().toLowerCase())) return raw[k];
+                        }
+                        return undefined;
+                    };
+                    const u = String(get(['username', 'user', 'id']) || '').trim().toLowerCase();
+                    const sc = get(['score', 'mark', 'result', 'ውጤት', tc.assignedSubject.toLowerCase()]);
+                    if (!u || sc === undefined) continue;
+                    const st = myStudents.find(x => String(x.username).toLowerCase() === u);
+                    if (!st) continue;
+                    const input = document.querySelector(`input[name="score_${CSS.escape(st.id)}"]`);
+                    if (input) {
+                        input.value = Math.max(0, Math.min(100, Number(sc) || 0));
+                        count++;
+                    }
+                }
+                showToast(`${count} ተማሪዎች ውጤት ከExcel ተሞልቷል! አረጋግጠው «ለርዕሰ መምህር ላክ» የሚለውን ይጫኑ።`, 'success');
+            } catch (err) {
+                console.error(err);
+                showToast('የExcel ፋይሉን ማንበብ አልተቻለም!', 'error');
+            } finally {
+                e.target.value = '';
+            }
+        };
 
         window.submitTeacherScores = async (e) => {
             e.preventDefault();
@@ -3480,6 +3697,55 @@ const firebaseConfig = {
             </div>`;
         }
 
+  // --- 4. PROMOTION FORMULA (ONLY FOR ASSIGNED SUBJECTS OF THAT CLASS) ---
+        function calculateStudentPromotion(scores, grade, section) {
+            // ለዚህ ክፍል እና ሴክሽን በመምህር የተመደቡ ትምህርቶችን ብቻ መለየት
+            const assignedSubs = [...new Set(
+                state.teachers
+                    .filter(tc => Number(tc.assignedGrade) === Number(grade) && String(tc.assignedSection).toUpperCase() === String(section).toUpperCase())
+                    .map(tc => tc.assignedSubject)
+            )];
+
+            // መምህር ካልተመደበ ገና ውጤት የገባባቸውን ትምህርቶች ብቻ ይጠቀማል
+            const activeSubs = assignedSubs.length > 0
+                ? assignedSubs
+                : SUBJECT_KEYS.filter(k => scores[k] !== undefined && scores[k] !== null && scores[k] !== '');
+
+            if (!activeSubs.length) return { total: 0, average: 0, status: 'INCOMPLETE' };
+
+            let blankCount = 0;
+            let below50 = 0;
+            let total = 0;
+
+            for (const sub of activeSubs) {
+                const val = scores[sub];
+                if (val === undefined || val === null || val === '') {
+                    blankCount++;
+                } else {
+                    const num = Number(val);
+                    total += num;
+                    if (num < 50) below50++;
+                }
+            }
+
+            const filledCount = activeSubs.length - blankCount;
+            const average = filledCount > 0 ? Number((total / activeSubs.length).toFixed(1)) : 0;
+
+            let status = 'DETAINED';
+            if (blankCount >= 1) {
+                status = 'INCOMPLETE';
+            } else if (
+                (below50 === 0 && average >= 50) ||
+                (below50 === 1 && average >= 51) ||
+                (below50 === 2 && average >= 53) ||
+                (below50 === 3 && average >= 55)
+            ) {
+                status = 'PROMOTED';
+            }
+
+            return { total, average, status };
+        }
+
         window.approveSubmission = async (subId) => {
             const sub = state.submissions.find(x => x.id === subId);
             if (!sub) return;
@@ -3487,9 +3753,8 @@ const firebaseConfig = {
                 const st = state.students.find(x => x.id === en.studentId);
                 if (!st) continue;
                 const scores = { ...(st.scores || {}), [sub.subject]: Number(en.score) };
-                const total = SUBJECT_KEYS.reduce((a, k) => a + Number(scores[k] || 0), 0);
-                const average = Number((total / SUBJECT_KEYS.length).toFixed(1));
-                await dbSave('students', st.id, { ...st, scores, total, average, status: average >= 50 ? 'Pass' : 'Fail', updatedAt: Date.now() });
+                const { total, average, status } = calculateStudentPromotion(scores, st.grade, st.section);
+                await dbSave('students', st.id, { ...st, scores, total, average, status, updatedAt: Date.now() });
             }
             await dbSave('submissions', subId, { ...sub, status: 'approved', approvedAt: Date.now() });
             showToast('ውጤቱ ጸድቆ ወደ ተማሪዎች ዳታቤዝ ገብቷል!', 'success');
@@ -3505,5 +3770,43 @@ const firebaseConfig = {
         updateChromeInfo();
         initFirebaseOrLocal();
     </script>
+    <!-- Dark / Light Mode Toggle -->
+<style>
+    html.dark body { background-color: #0f172a !important; color: #e2e8f0 !important; }
+    html.dark .bg-white, html.dark .bg-white\/95 { background-color: #1e293b !important; color: #f1f5f9 !important; }
+    html.dark .bg-slate-50, html.dark .bg-slate-100 { background-color: #0f172a !important; color: #e2e8f0 !important; }
+    html.dark .border-slate-200, html.dark .border-slate-300 { border-color: #334155 !important; }
+    html.dark .text-slate-900, html.dark .text-slate-800, html.dark .text-slate-700,
+    html.dark .text-royal-900, html.dark .text-royal-800 { color: #f1f5f9 !important; }
+    html.dark .text-slate-600, html.dark .text-slate-500 { color: #cbd5e1 !important; }
+    html.dark input, html.dark select, html.dark textarea {
+        background-color: #0f172a !important; color: #f8fafc !important; border-color: #475569 !important;
+    }
+    html.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: #334155 !important; }
+</style>
+
+<button id="themeToggleBtn" onclick="toggleThemeMode()" title="ብርሃን / ጨለማ ቀይር"
+    class="no-print fixed bottom-5 left-5 z-50 flex items-center gap-2 px-4 py-2.5 rounded-full shadow-lg border border-slate-300 bg-white text-slate-800 font-bold text-xs hover:scale-105 transition">
+    <span id="themeToggleIcon">🌙</span>
+    <span id="themeToggleText">ጨለማ</span>
+</button>
+
+<script>
+    function applyThemeMode(isDark) {
+        document.documentElement.classList.toggle('dark', isDark);
+        const icon = document.getElementById('themeToggleIcon');
+        const text = document.getElementById('themeToggleText');
+        if (icon && text) {
+            icon.textContent = isDark ? '☀️' : '🌙';
+            text.textContent = isDark ? 'ብርሃን' : 'ጨለማ';
+        }
+    }
+    window.toggleThemeMode = () => {
+        const isDark = !document.documentElement.classList.contains('dark');
+        localStorage.setItem('motta_theme', isDark ? 'dark' : 'light');
+        applyThemeMode(isDark);
+    };
+    applyThemeMode(localStorage.getItem('motta_theme') === 'dark');
+</script>
 </body>
 </html>
