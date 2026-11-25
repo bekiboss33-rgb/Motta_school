@@ -2237,7 +2237,7 @@ function getAboutPageData() {
                     renderCurrentView();
                     return;
                 }
-                if (if (!isPublished(s1.grade, 1) || !isPublished(s1.grade, 2)) { || !isPublished(s1.grade, 2)) {
+               if (!isPublished(s1.grade, 'annual')) {
                     state.resultLookup = { student: null, locked: true, lockedGrade: s1.grade, lockedSemester: '1 & 2', error: '' };
                     renderCurrentView();
                     return;
@@ -2516,7 +2516,7 @@ async function logActivity(action, details = '') {
             state.adminTab = 'publish';
             renderCurrentView();
         };
-}
+                
         function renderAdminPublishTab() {
             return `
             <div>
