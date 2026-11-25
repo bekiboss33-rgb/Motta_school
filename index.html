@@ -185,12 +185,12 @@
                     <svg class="w-4 h-4 text-gold-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
                     <span data-i18n="nav_admin">አድሚን</span>
                 </button>
+          <button onclick="navigateTo('admin')" class="hidden sm:inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-royal-950 font-bold text-xs sm:text-sm px-3.5 py-2 rounded-xl transition shadow-sm">
+                    <span>👨‍🏫 መምህራን</span>
+                </button>
                 <button onclick="toggleMobileMenu()" class="xl:hidden p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 transition" aria-label="Menu">
                     <svg id="menu-icon-open" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
                     <svg id="menu-icon-close" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                    <button onclick="navigateTo('admin')" class="hidden sm:inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-royal-950 font-bold text-xs px-3.5 py-2 rounded-xl transition shadow-sm">
-                    <span>👨‍🏫 መምህራን</span>
-                </button>
                 </button>
             </div>
         </div>
@@ -1057,6 +1057,7 @@ const firebaseConfig = {
         }
 
         async function dbDelete(colName, id) {
+            logActivity(`Delete: ${colName}`, `ID: ${id}`);
             if (state.dbMode === 'firebase') {
                 if (!currentUser) return;
                 await deleteDoc(pubDoc(colName, id));
@@ -1068,6 +1069,7 @@ const firebaseConfig = {
         }
 
         async function dbSaveConfig(docId, data) {
+            logActivity(`Config: ${docId}`, 'ቅንብር / ውጤት መፍቀጃ ተቀይሯል');
             if (state.dbMode === 'firebase') {
                 if (!currentUser) return;
                 await setDoc(pubDoc('config', docId), data, { merge: true });
@@ -1493,9 +1495,9 @@ function getAboutPageData() {
                 desc: t('footer_desc'),
                 deptHeading: 'የትምህርት ክፍሎቻችን (Academic Departments)',
                 cards: [
-                    { id: 'c1', icon: '🎯', title: t('vision_title'), desc: t('vision_desc') },
-                    { id: 'c2', icon: '🚀', title: t('mission_title'), desc: t('mission_desc') },
-                    { id: 'c3', icon: '⭐', title: t('values_title'), desc: t('values_desc') }
+                    { id: 'c1', icon: '🎯', title: t('vision_title'), desc: t('vision_text') },
+                    { id: 'c2', icon: '🚀', title: t('mission_title'), desc: t('mission_text') },
+                    { id: 'c3', icon: '⭐', title: t('values_title'), desc: t('values_text') }
                 ],
                 departments: defaultDepts
             };
@@ -2058,7 +2060,7 @@ function getAboutPageData() {
                             </div>
                             <div class="text-xs sm:text-right font-semibold text-slate-600">
                                 <div>${escapeHtml(t('stat_year'))}: <span class="text-slate-900 font-bold">${escapeHtml(state.schoolSettings.academicYear)}</span></div>
-                                <div class="mt-1">${escapeHtml(t('lbl_semester'))}: <span class="text-royal-900 font-bold">${escapeHtml(s.semester === 1 ? t('sem_1') : t('sem_2'))}</span></div>
+                                <div class="mt-1">${escapeHtml(t('lbl_semester'))}: <span class="text-royal-900 font-bold">${escapeHtml(s.semester === 1 ? t('sem_1') : (s.semester === 2 ? t('sem_2') : String(s.semester)))}</span></div>
                             </div>
                         </div>
 
@@ -2235,7 +2237,7 @@ function getAboutPageData() {
                     renderCurrentView();
                     return;
                 }
-                if (!isPublished(s1.grade, 1) || !isPublished(s1.grade, 2)) {
+                if (if (!isPublished(s1.grade, 1) || !isPublished(s1.grade, 2)) { || !isPublished(s1.grade, 2)) {
                     state.resultLookup = { student: null, locked: true, lockedGrade: s1.grade, lockedSemester: '1 & 2', error: '' };
                     renderCurrentView();
                     return;
@@ -2265,7 +2267,7 @@ function getAboutPageData() {
                 }).filter(Boolean).sort((a, b) => b.average - a.average);
 
                 const idx = annualList.findIndex(x => String(x.username).toLowerCase() === username);
-                const match = { ...annualList[idx], rank: idx + 1, rankTotal: annualList.length };
+                const match = { ...annualList[idx], rank: idx + 1, totalPeers: annualList.length };
                 state.resultLookup = { student: match, locked: false, lockedGrade: null, lockedSemester: null, error: '' };
                 renderCurrentView();
                 return;
@@ -2279,7 +2281,7 @@ function getAboutPageData() {
                 Number(x.semester) === semester
             );
             if (!matchRaw) {
-                state.resultLookup = { student: null, locked: false, lockedGrade: null, lockedSemester: null, error: t('res_err_not_found') };
+                state.resultLookup = { student: null, locked: false, lockedGrade: null, lockedSemester: null, error: t('err_invalid_student') };
                 renderCurrentView();
                 return;
             }
@@ -2295,7 +2297,7 @@ function getAboutPageData() {
                 .sort((a, b) => Number(b.average || 0) - Number(a.average || 0));
             const rank = peers.findIndex(x => x.id === matchRaw.id) + 1;
             const calc = calculateStudentPromotion(matchRaw.scores || {}, matchRaw.grade, matchRaw.section);
-            const match = { ...matchRaw, ...calc, rank, rankTotal: peers.length };
+            const match = { ...matchRaw, ...calc, rank, totalPeers: peers.length };
 
             state.resultLookup = { student: match, locked: false, lockedGrade: null, lockedSemester: null, error: '' };
             renderCurrentView();
@@ -2506,10 +2508,12 @@ async function logActivity(action, details = '') {
         };
 
         window.handleAdminLogout = () => {
+            logActivity('Logout', 'ከሲስተም ወጥቷል');
             state.adminSession = null;
+            state.adminTab = 'publish';
             renderCurrentView();
         };
-
+}
         function renderAdminPublishTab() {
             return `
             <div>
@@ -2686,7 +2690,7 @@ async function logActivity(action, details = '') {
                                         </span>
                                     </td>
                                     <td class="py-3 px-3 text-right whitespace-nowrap">
-                                      
+                                      <button onclick="openStudentFormModal('${escapeHtml(s.id)}')" class="text-royal-700 hover:underline font-bold mr-2">${escapeHtml(t('btn_edit'))}</button>
                                         <button onclick="confirmDeleteRecord('students','${escapeHtml(s.id)}')" class="text-red-600 hover:underline font-bold">${escapeHtml(t('btn_delete'))}</button>
                                     </td>
                                 </tr>
@@ -3672,10 +3676,7 @@ async function logActivity(action, details = '') {
             const activeSub = state.teacherSubject || tc.assignedSubject || 'amharic';
             tc.assignedSubject = activeSub;
 
-            const allSubjects = [
-                'amharic', 'english', 'math', 'physics', 'chemistry', 'biology',
-                'geography', 'history', 'citizenship', 'economics', 'it', 'hpe', 'agriculture'
-            ];
+            const allSubjects = SUBJECT_KEYS;
 
             const classStudents = state.students.filter(s =>
                 Number(s.grade) === Number(tc.assignedGrade) &&
